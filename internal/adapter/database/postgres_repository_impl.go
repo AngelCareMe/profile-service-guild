@@ -58,7 +58,7 @@ func (pr *postgresRepository) SaveCharacters(ctx context.Context, characters []e
 		)
 	}
 
-	sql, args, err := query.Suffix("ON CONFLICT (user_id, name, realm) DO UPDATE SET " +
+	sql, args, err := query.Suffix("ON CONFLICT (blizzard_id, name, realm) DO UPDATE SET " +
 		"battletag = EXCLUDED.battletag, " +
 		"race = EXCLUDED.race, " +
 		"faction = EXCLUDED.faction, " +
@@ -119,9 +119,9 @@ func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID stri
 	defer rows.Close()
 
 	var characters []entity.Character
-	var char entity.Character
 
 	for rows.Next() {
+		char := entity.Character{}
 		err := rows.Scan(
 			&char.BlizzardID,
 			&char.Battletag,
@@ -152,4 +152,3 @@ func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID stri
 	pr.log.Infof("Got %d characters for %s", len(characters), blizzardID)
 	return characters, nil
 }
-

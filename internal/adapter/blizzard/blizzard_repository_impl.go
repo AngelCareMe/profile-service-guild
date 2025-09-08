@@ -35,7 +35,7 @@ func NewBlizzardRepository(log *logrus.Logger) *blizzardRepository {
 	return &blizzardRepository{
 		client:  client,
 		log:     log,
-		limiter: rate.NewLimiter(rate.Every(time.Second/50), 50),
+		limiter: rate.NewLimiter(rate.Every(time.Second/50), 10),
 	}
 }
 
@@ -112,41 +112,49 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess str
 		return nil, errors.NewAppError("failed to decode profile", err)
 	}
 
-	var characters []entity.Character
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
 	user, err := br.GetUserData(ctx, blizzAccess)
 	if err != nil {
 		br.log.WithError(err).Error("failed parse user data")
 		return nil, err
 	}
 
-	for _, acc := range profile.WowAccounts {
-		for _, char := range acc.Characters {
-			wg.Add(1)
-			go func(c dto.CharacterSummary) {
-				defer wg.Done()
+	characters := make([]entity.Character, 0)
+	mu := &sync.Mutex{}
+
+	type job struct {
+		char dto.CharacterSummary
+	}
+
+	jobs := make(chan job)
+	wg := sync.WaitGroup{}
+
+	workerCount := 5
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range jobs {
+				char := j.char
 
 				mythScore, err := br.getMythicScore(ctx, blizzAccess, char.Realm.Slug, char.Name)
 				if err != nil {
 					br.log.WithError(err).WithFields(logrus.Fields{
-						"character": c.Name,
-						"realm":     c.Realm.Slug,
-					}).Error("failed parse mythic score")
+						"character": char.Name,
+						"realm":     char.Realm.Slug,
+					}).Warn("failed to get mythic score")
 					mythScore = 0
 				}
 
 				details, err := br.getCharacterDetails(ctx, blizzAccess, char.Realm.Slug, char.Name)
 				if err != nil {
 					br.log.WithError(err).WithFields(logrus.Fields{
-						"character": c.Name,
-						"realm":     c.Realm.Slug,
-					}).Error("failed parse character details")
-					return
+						"character": char.Name,
+						"realm":     char.Realm.Slug,
+					}).Warn("failed to get character details")
+					continue
 				}
 
-				character := entity.Character{
+				newChar := entity.Character{
 					BlizzardID:  user.ID,
 					Battletag:   user.Battletag,
 					Name:        char.Name,
@@ -163,13 +171,26 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess str
 				}
 
 				mu.Lock()
-				characters = append(characters, character)
+				characters = append(characters, newChar)
 				mu.Unlock()
-			}(char)
-		}
+			}
+		}()
 	}
-	wg.Wait()
 
+	go func() {
+		for _, acc := range profile.WowAccounts {
+			for _, char := range acc.Characters {
+				select {
+				case <-ctx.Done():
+					return
+				case jobs <- job{char: char}:
+				}
+			}
+		}
+		close(jobs)
+	}()
+
+	wg.Wait()
 	br.log.Info("Characters parsed succeeded")
 	return characters, nil
 }
@@ -213,8 +234,12 @@ func (br *blizzardRepository) getCharacterDetails(ctx context.Context, blizzAcce
 		return nil, errors.NewAppError("failed to decode details", err)
 	}
 
-	if details.Spec.Name == "" || details.Ilvl == 0 {
-		br.log.Warn("incomplete details response")
+	if details.Spec.Name == "" {
+		details.Spec.Name = "Нет специализации"
+	}
+
+	if details.Guild.Name == "" {
+		details.Guild.Name = "Нет гильдии"
 	}
 
 	return &details, nil
