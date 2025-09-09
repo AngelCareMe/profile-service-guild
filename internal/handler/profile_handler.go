@@ -30,7 +30,23 @@ func NewProfileHandler(
 
 func (h *ProfileHandler) GetCharacters(c *gin.Context) {
 	tokenStr := c.GetHeader("Authorization")
+	if tokenStr == "" {
+		h.log.Error("Auth header is missing")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing auth header"})
+		return
+	}
 	token := strings.TrimPrefix(tokenStr, "Bearer ")
+	if token == "" {
+		h.log.Error("Invalid Bearer token")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Bearer token"})
+		return
+	}
+
+	tokenAccess, err := h.blizzAd.GetBlizzardAccessToken(c.Request.Context(), token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid access token"})
+		return
+	}
 
 	user, err := h.blizzAd.GetUserData(c.Request.Context(), token)
 	if err != nil {
@@ -38,7 +54,7 @@ func (h *ProfileHandler) GetCharacters(c *gin.Context) {
 		return
 	}
 
-	characters, err := h.uc.GetCharacters(c.Request.Context(), user.ID, token)
+	characters, err := h.uc.GetCharacters(c.Request.Context(), user.ID, tokenAccess, token)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed parse characters"})
 		return
@@ -49,7 +65,17 @@ func (h *ProfileHandler) GetCharacters(c *gin.Context) {
 
 func (h *ProfileHandler) RefreshCharacters(c *gin.Context) {
 	tokenStr := c.GetHeader("Authorization")
+	if tokenStr == "" {
+		h.log.Error("Auth header is missing")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing auth header"})
+		return
+	}
 	token := strings.TrimPrefix(tokenStr, "Bearer ")
+	if token == "" {
+		h.log.Error("Invalid Bearer token")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Bearer token"})
+		return
+	}
 
 	user, err := h.blizzAd.GetUserData(c.Request.Context(), token)
 	if err != nil {
@@ -57,12 +83,18 @@ func (h *ProfileHandler) RefreshCharacters(c *gin.Context) {
 		return
 	}
 
-	if err := h.uc.RefreshCharacters(c.Request.Context(), user.ID, token); err != nil {
+	tokenAccess, err := h.blizzAd.GetBlizzardAccessToken(c.Request.Context(), token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid access token"})
+		return
+	}
+
+	if err := h.uc.RefreshCharacters(c.Request.Context(), user.ID, tokenAccess, token); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed refresh characters"})
 		return
 	}
 
-	characters, err := h.uc.GetCharacters(c.Request.Context(), user.ID, token)
+	characters, err := h.uc.GetCharacters(c.Request.Context(), user.ID, tokenAccess, token)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed parse characters"})
 		return

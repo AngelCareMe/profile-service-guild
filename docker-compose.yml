@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # СВОЯ база данных для profile сервиса
+  profile_postgres:
+    image: postgres:17
+    restart: always
+    env_file: .env
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - profile_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shared-backend
+    ports:
+      - "5433:5432"  # Другой порт!
+
+  profile_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: on-failure
+    env_file: .env
+    environment:
+      - DB_HOST=profile_postgres  # Подключение к СВОЕЙ базе!
+      - DB_PORT=5432
+      - AUTH_SERVICE_URL=http://auth_service:8080
+    depends_on:
+      profile_postgres:
+        condition: service_healthy
+    networks:
+      - shared-backend
+    ports:
+      - "8081:8081"
+
+networks:
+  shared-backend:
+    external:
+      name: shared-backend-network
+
+volumes:
+  profile_pgdata:

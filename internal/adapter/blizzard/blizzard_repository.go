@@ -7,6 +7,7 @@ import (
 )
 
 type BlizzardRepository interface {
-	GetCharacters(ctx context.Context, blizzAccess string) ([]entity.Character, error)
-	GetUserData(ctx context.Context, blizzAccess string) (*dto.UserDTO, error)
+	GetCharacters(ctx context.Context, blizzAccess, jwtToken string) ([]entity.Character, error)
+	GetUserData(ctx context.Context, jwtToken string) (*dto.UserDTO, error)
+	GetBlizzardAccessToken(ctx context.Context, jwtToken string) (string, error)
 }

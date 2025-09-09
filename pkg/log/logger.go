@@ -6,7 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func InitLogger(cfg *config.Config) (*logrus.Logger, error) {
+func InitLogger(cfg *config.Config) *logrus.Logger {
 	log := logrus.New()
 
 	logLvl, err := logrus.ParseLevel(cfg.Logger.Level)
@@ -23,5 +23,5 @@ func InitLogger(cfg *config.Config) (*logrus.Logger, error) {
 		"service": "profile",
 	}).Info("logger initialized")
 
-	return log, nil
+	return log
 }

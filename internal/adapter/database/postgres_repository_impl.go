@@ -23,7 +23,7 @@ func NewPostgresRepository(pool *pgxpool.Pool, log *logrus.Logger) *postgresRepo
 
 func (pr *postgresRepository) SaveCharacters(ctx context.Context, characters []entity.Character) error {
 	query := psql.
-		Insert("characters").
+		Insert("profile").
 		Columns(
 			"blizzard_id",
 			"battletag",
@@ -102,7 +102,7 @@ func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID stri
 		"mythic_score",
 		"is_main",
 	).
-		From("characters").
+		From("profile").
 		Where(sq.Eq{"blizzard_id": blizzardID})
 
 	sql, args, err := query.ToSql()

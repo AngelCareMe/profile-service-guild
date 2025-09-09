@@ -1,0 +1,22 @@
+db:
+  user: postgres
+  pass: postgres
+  host: profile_postgres
+  port: 5432
+  name: postgres
+  sslmode: disable
+
+blizzard:
+  client_id: 9511f15bd8ed493d8fbc08a8c572289d
+  client_secret: SnMpMjkFCtaKxFztbO8uzqlksrFYr3Rb
+  redirect_url: http://localhost:8080/callback
+
+jwt:
+  secret: H9y+By7hrKHMlWK59cpA9n3wd1rJqDSEmNn7S3OGzb0=
+
+logger:
+  level: info
+
+server:
+  host: localhost
+  port: 8081

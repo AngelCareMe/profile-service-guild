@@ -1,14 +1,17 @@
 package blizzard
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"profile-service/internal/entity"
 	"profile-service/pkg/dto"
 	"profile-service/pkg/errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,22 +42,22 @@ func NewBlizzardRepository(log *logrus.Logger) *blizzardRepository {
 	}
 }
 
-func (br *blizzardRepository) GetUserData(ctx context.Context, blizzAccess string) (*dto.UserDTO, error) {
-	if blizzAccess == "" {
+func (br *blizzardRepository) GetUserData(ctx context.Context, jwtToken string) (*dto.UserDTO, error) {
+	if jwtToken == "" {
 		br.log.Error("access header is missing")
 		return nil, errors.NewAppError("access token is empty", nil)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "http://localhost:8080/auth/user", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://auth_service:8080/auth/user", nil)
 	if err != nil {
 		br.log.WithError(err).Errorf("failed create get user request: %v ", err)
 		return nil, errors.NewAppError("failed create get user request", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+blizzAccess)
+	req.Header.Set("Authorization", "Bearer "+jwtToken)
 
 	resp, err := br.client.Do(req)
 	if err != nil {
-		br.log.WithError(err).WithField("req", req).Error("failed get user response")
+		br.log.WithError(err).Error("failed get user response")
 		return nil, errors.NewAppError("failed get user response", err)
 	}
 	defer resp.Body.Close()
@@ -77,9 +80,46 @@ func (br *blizzardRepository) GetUserData(ctx context.Context, blizzAccess strin
 	return &userDTO, nil
 }
 
-func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess string) ([]entity.Character, error) {
+func (br *blizzardRepository) GetBlizzardAccessToken(ctx context.Context, jwtToken string) (string, error) {
+	if jwtToken == "" {
+		br.log.Error("access header is missing")
+		return "", errors.NewAppError("access token is empty", nil)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://auth_service:8080/auth/blizzard/token", nil)
+	if err != nil {
+		return "", errors.NewAppError("failed create get blizzard token request", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+jwtToken)
+
+	resp, err := br.client.Do(req)
+	if err != nil {
+		return "", errors.NewAppError("failed get blizzard token response", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", errors.NewAppError(fmt.Sprintf("bad response from auth service: %d, %s", resp.StatusCode, string(body)), nil)
+	}
+
+	var tokenResp struct {
+		AccessToken string `json:"access"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", errors.NewAppError("failed to decode blizzard token response", err)
+	}
+
+	return tokenResp.AccessToken, nil
+}
+
+func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess, jwtToken string) ([]entity.Character, error) {
 	if blizzAccess == "" {
 		br.log.Error("access header is missing")
+		return nil, errors.NewAppError("access token is empty", nil)
+	}
+	if jwtToken == "" {
+		br.log.Error("jwt token is missing")
 		return nil, errors.NewAppError("access token is empty", nil)
 	}
 
@@ -92,7 +132,7 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess str
 
 	resp, err := br.client.Do(req)
 	if err != nil {
-		br.log.WithError(err).WithField("req", req).Error("failed get characters response")
+		br.log.WithError(err).Error("failed get characters response")
 		return nil, errors.NewAppError("failed get characters response", err)
 	}
 	defer resp.Body.Close()
@@ -112,7 +152,7 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess str
 		return nil, errors.NewAppError("failed to decode profile", err)
 	}
 
-	user, err := br.GetUserData(ctx, blizzAccess)
+	user, err := br.GetUserData(ctx, jwtToken)
 	if err != nil {
 		br.log.WithError(err).Error("failed parse user data")
 		return nil, err
@@ -125,10 +165,10 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess str
 		char dto.CharacterSummary
 	}
 
-	jobs := make(chan job)
+	jobs := make(chan job, 10)
 	wg := sync.WaitGroup{}
 
-	workerCount := 5
+	workerCount := 3
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go func() {
@@ -151,7 +191,15 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess str
 						"character": char.Name,
 						"realm":     char.Realm.Slug,
 					}).Warn("failed to get character details")
-					continue
+					details = &dto.CharacterDetailsResponse{
+						Spec: struct {
+							Name string "json:\"name\""
+						}{"Unknown"},
+						Ilvl: 0,
+						Guild: struct {
+							Name string "json:\"name\""
+						}{"None"},
+					}
 				}
 
 				newChar := entity.Character{
@@ -201,7 +249,11 @@ func (br *blizzardRepository) getCharacterDetails(ctx context.Context, blizzAcce
 		return nil, fmt.Errorf("token/realm/character name is empty")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://eu.api.blizzard.com/profile/wow/character/%s/%s?namespace=profile-eu&locale=ru_RU", realm, charName), nil)
+	charName = strings.ToLower(charName)
+	encodedName := url.QueryEscape(charName)
+	charURL := fmt.Sprintf("https://eu.api.blizzard.com/profile/wow/character/%s/%s?namespace=profile-eu&locale=ru_RU", realm, encodedName)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", charURL, nil)
 	if err != nil {
 		br.log.WithError(err).Errorf("failed create character details request for character %s: %v ", charName, err)
 		return nil, errors.NewAppError("failed create character details request", err)
@@ -223,8 +275,17 @@ func (br *blizzardRepository) getCharacterDetails(ctx context.Context, blizzAcce
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+
 	if resp.StatusCode != http.StatusOK {
-		br.log.WithField("status", resp.StatusCode).Warn("bad request")
+		br.log.WithFields(logrus.Fields{
+			"status":    resp.StatusCode,
+			"body":      string(body),
+			"character": charName,
+			"realm":     realm,
+			"url":       charURL,
+		}).Warn("bad request")
 		return nil, fmt.Errorf("bad request")
 	}
 
@@ -251,7 +312,11 @@ func (br *blizzardRepository) getMythicScore(ctx context.Context, blizzAccess, r
 		return 0, fmt.Errorf("token/realm/character name is empty")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://eu.api.blizzard.com/profile/wow/character/%s/%s/mythic-keystone-profile?namespace=profile-eu&locale=ru_RU", realm, charName), nil)
+	charName = strings.ToLower(charName)
+	encodedName := url.QueryEscape(charName)
+	mythURL := fmt.Sprintf("https://eu.api.blizzard.com/profile/wow/character/%s/%s/mythic-keystone-profile?namespace=profile-eu&locale=ru_RU", realm, encodedName)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", mythURL, nil)
 	if err != nil {
 		br.log.WithError(err).Errorf("failed create mythic score request for character %s: %v ", charName, err)
 		return 0, errors.NewAppError("failed create mythic score request", err)
@@ -273,12 +338,21 @@ func (br *blizzardRepository) getMythicScore(ctx context.Context, blizzAccess, r
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+
 	if resp.StatusCode == http.StatusNotFound {
 		return 0, nil
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		br.log.WithField("status", resp.StatusCode).Warn("bad request")
+		br.log.WithFields(logrus.Fields{
+			"status":    resp.StatusCode,
+			"body":      string(body),
+			"character": charName,
+			"realm":     realm,
+			"url":       mythURL,
+		}).Warn("bad request")
 		return 0, fmt.Errorf("bad request")
 	}
 

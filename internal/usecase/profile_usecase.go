@@ -6,6 +6,6 @@ import (
 )
 
 type ProfileUsecase interface {
-	GetCharacters(ctx context.Context, blizzardID, accessToken string) ([]entity.Character, error)
-	RefreshCharacters(ctx context.Context, blizzardID, accessToken string) error
+	GetCharacters(ctx context.Context, blizzardID, accessToken, jwtToken string) ([]entity.Character, error)
+	RefreshCharacters(ctx context.Context, blizzardID, accessToken, jwtToken string) error
 }
