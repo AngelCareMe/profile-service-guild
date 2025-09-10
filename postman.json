@@ -1,0 +1,246 @@
+{
+  "info": {
+    "name": "Blizzard Auth & Profile API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrlAuth",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "baseUrlProfile",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Auth Service (Port 8080)",
+      "item": [
+        {
+          "name": "GET Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlAuth}}/health",
+              "host": ["{{baseUrlAuth}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /auth/login → Redirect to Blizzard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlAuth}}/auth/login",
+              "host": ["{{baseUrlAuth}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /callback → Exchange Code for Tokens",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlAuth}}/callback?code=MOCK_CODE_FROM_BLIZZARD&state=random123",
+              "host": ["{{baseUrlAuth}}"],
+              "path": ["callback"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "MOCK_CODE_FROM_BLIZZARD"
+                },
+                {
+                  "key": "state",
+                  "value": "random123"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set(\"accessToken\", jsonData.access);",
+                  "    pm.environment.set(\"refreshToken\", jsonData.refresh);",
+                  "    console.log(\"Tokens saved!\");",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "GET /auth/user → Get User Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlAuth}}/auth/user",
+              "host": ["{{baseUrlAuth}}"],
+              "path": ["auth", "user"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /auth/blizzard/token → Get Blizzard Access Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlAuth}}/auth/blizzard/token",
+              "host": ["{{baseUrlAuth}}"],
+              "path": ["auth", "blizzard", "token"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /auth/refresh → Refresh JWT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{refreshToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrlAuth}}/auth/refresh",
+              "host": ["{{baseUrlAuth}}"],
+              "path": ["auth", "refresh"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set(\"accessToken\", jsonData.access);",
+                  "    pm.environment.set(\"refreshToken\", jsonData.refresh);",
+                  "    console.log(\"Tokens refreshed!\");",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🎮 Profile Service (Port 8081)",
+      "item": [
+        {
+          "name": "GET /profile/refresh → Refresh Characters from Blizzard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlProfile}}/profile/refresh",
+              "host": ["{{baseUrlProfile}}"],
+              "path": ["profile", "refresh"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /profile/characters → Get Sorted Characters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlProfile}}/profile/characters",
+              "host": ["{{baseUrlProfile}}"],
+              "path": ["profile", "characters"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /profile/main?character=Имя → Set Main Character",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlProfile}}/profile/main?character=Хосеа",
+              "host": ["{{baseUrlProfile}}"],
+              "path": ["profile", "main"],
+              "query": [
+                {
+                  "key": "character",
+                  "value": "Хосеа"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -89,3 +89,22 @@ func (uc *profileUsecase) RefreshCharacters(ctx context.Context, blizzardID, acc
 
 	return nil
 }
+
+func (uc *profileUsecase) SetMain(ctx context.Context, blizzardID, charName string) error {
+	if blizzardID == "" || charName == "" {
+		uc.log.Error("blizzardID or charcater name is empty")
+		return errors.NewAppError("blizzardID or charcater name is empty", nil)
+	}
+
+	_, err := uc.dbAd.GetCharacterByName(ctx, charName)
+	if err != nil {
+		uc.log.WithError(err).Errorf("character %s not found", charName)
+		return err
+	}
+
+	if err := uc.dbAd.SetMainCharacter(ctx, blizzardID, charName); err != nil {
+		return err
+	}
+
+	return nil
+}

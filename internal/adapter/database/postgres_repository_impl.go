@@ -103,7 +103,8 @@ func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID stri
 		"is_main",
 	).
 		From("profile").
-		Where(sq.Eq{"blizzard_id": blizzardID})
+		Where(sq.Eq{"blizzard_id": blizzardID}).
+		OrderBy("mythic_score DESC")
 
 	sql, args, err := query.ToSql()
 	if err != nil {
@@ -138,8 +139,8 @@ func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID stri
 			&char.IsMain,
 		)
 		if err != nil {
-			pr.log.WithError(err).Error("failed to scan character row")
-			return nil, errors.NewAppError("failed to scan character row", err)
+			pr.log.WithError(err).Error("failed to scan character rows")
+			return nil, errors.NewAppError("failed to scan character rows", err)
 		}
 		characters = append(characters, char)
 	}
@@ -151,4 +152,106 @@ func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID stri
 
 	pr.log.Infof("Got %d characters for %s", len(characters), blizzardID)
 	return characters, nil
+}
+
+func (pr *postgresRepository) SetMainCharacter(ctx context.Context, blizzardID, charName string) error {
+	tx, err := pr.pool.Begin(ctx)
+	if err != nil {
+		pr.log.WithError(err).Error("failed to begin transaction")
+		return errors.NewAppError("failed to begin transaction", err)
+	}
+	defer tx.Rollback(ctx)
+
+	resetQuery, resetArgs, err := psql.
+		Update("profile").
+		Set("is_main", false).
+		Where(sq.Eq{"blizzard_id": blizzardID}).
+		ToSql()
+	if err != nil {
+		pr.log.WithError(err).Error("failed build query for reset main character")
+		return errors.NewAppError("failed build query for reset main character", err)
+	}
+
+	_, err = tx.Exec(ctx, resetQuery, resetArgs...)
+	if err != nil {
+		pr.log.WithError(err).Errorf("failed to reset main charcter for user: %s", blizzardID)
+		return errors.NewAppError("failed to reset main charcter", err)
+	}
+
+	setQuery, setArgs, err := psql.
+		Update("profile").
+		Set("is_main", true).
+		Where(sq.ILike{"name": charName}).
+		ToSql()
+	if err != nil {
+		pr.log.WithError(err).Error("failed build query for set main character")
+		return errors.NewAppError("failed build query for set main character", err)
+	}
+
+	_, err = tx.Exec(ctx, setQuery, setArgs...)
+	if err != nil {
+		pr.log.WithError(err).Errorf("failed to set main charcter for user: %s", blizzardID)
+		return errors.NewAppError("failed to set main charcter", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		pr.log.WithError(err).Error("failed to commit set main transaction")
+		return errors.NewAppError("failed to commit set main transaction", err)
+	}
+
+	pr.log.WithFields(logrus.Fields{
+		"blizzard_id": blizzardID,
+		"character":   charName,
+	}).Infof("Set main for %s succeeded", charName)
+
+	return nil
+}
+
+func (pr *postgresRepository) GetCharacterByName(ctx context.Context, charName string) (*entity.Character, error) {
+	query, args, err := psql.Select(
+		"blizzard_id",
+		"battletag",
+		"name",
+		"realm",
+		"race",
+		"faction",
+		"class",
+		"spec",
+		"lvl",
+		"ilvl",
+		"guild",
+		"mythic_score",
+		"is_main",
+	).From("profile").
+		Where(sq.ILike{"name": charName}).
+		ToSql()
+
+	if err != nil {
+		pr.log.WithError(err).Error("failed build query for get character")
+		return nil, errors.NewAppError("failed build query for get character", err)
+	}
+
+	var char entity.Character
+	if err := pr.pool.QueryRow(ctx, query, args...).
+		Scan(
+			&char.BlizzardID,
+			&char.Battletag,
+			&char.Name,
+			&char.Realm,
+			&char.Race,
+			&char.Faction,
+			&char.Class,
+			&char.Spec,
+			&char.Lvl,
+			&char.Ilvl,
+			&char.Guild,
+			&char.MythicScore,
+			&char.IsMain,
+		); err != nil {
+		pr.log.WithError(err).Error("failed to scan character row")
+		return nil, errors.NewAppError("failed to scan character row", err)
+	}
+
+	pr.log.WithField("character", charName).Infof("%s get succeeded", charName)
+	return &char, nil
 }

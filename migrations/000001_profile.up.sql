@@ -18,3 +18,5 @@ CREATE TABLE IF NOT EXISTS profile (
 CREATE INDEX IF NOT EXISTS idx_character_blizzard_id ON profile (blizzard_id);
 
 CREATE INDEX IF NOT EXISTS idx_character_battletag ON profile (battletag);
+
+CREATE UNIQUE INDEX idx_profile_blizzard_id_main ON profile (blizzard_id) WHERE is_main = true;

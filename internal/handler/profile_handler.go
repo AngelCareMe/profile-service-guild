@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"math"
 	"net/http"
 	"profile-service/internal/adapter/blizzard"
 	"profile-service/internal/usecase"
+	"profile-service/pkg/dto"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -60,7 +62,69 @@ func (h *ProfileHandler) GetCharacters(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"characters": characters})
+	characterResponses := make([]dto.CharacterResponse, len(characters))
+	for i, char := range characters {
+		characterResponses[i] = dto.CharacterResponse{
+			Name:        char.Name,
+			Realm:       char.Realm,
+			Race:        char.Race,
+			Faction:     char.Faction,
+			Class:       char.Class,
+			Spec:        char.Spec,
+			Lvl:         char.Lvl,
+			Ilvl:        char.Ilvl,
+			Guild:       char.Guild,
+			MythicScore: math.Round(char.MythicScore*100) / 100,
+			IsMain:      char.IsMain,
+		}
+	}
+
+	profileResponse := dto.ProfileResponse{
+		BlizzardID: user.ID,
+		Battletag:  user.Battletag,
+		Characters: characterResponses,
+	}
+
+	c.JSON(http.StatusOK, profileResponse)
+}
+
+func (h ProfileHandler) SetMainCharacter(c *gin.Context) {
+	charName := c.Query("character")
+	if charName == "" {
+		h.log.Error("Character name is missing")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing char name"})
+		return
+	}
+
+	jwtToken := c.GetHeader("Authorization")
+	if jwtToken == "" {
+		h.log.Error("Auth header is missing")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing auth header"})
+		return
+	}
+
+	token := strings.TrimPrefix(jwtToken, "Bearer ")
+	if token == "" {
+		h.log.Error("Invalid Bearer token")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Bearer token"})
+		return
+	}
+
+	user, err := h.blizzAd.GetUserData(c.Request.Context(), token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid access token"})
+		return
+	}
+
+	if err := h.uc.SetMain(c.Request.Context(), user.ID, charName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed set main character"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Main character set succeed",
+		"character": charName,
+	})
 }
 
 func (h *ProfileHandler) RefreshCharacters(c *gin.Context) {

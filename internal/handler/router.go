@@ -18,4 +18,5 @@ func SetupRoutes(
 	profile := router.Group("/profile")
 	profile.GET("/refresh", h.RefreshCharacters)
 	profile.GET("/characters", h.GetCharacters)
+	profile.POST("/main", h.SetMainCharacter)
 }
