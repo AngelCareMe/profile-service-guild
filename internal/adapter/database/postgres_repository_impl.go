@@ -22,9 +22,17 @@ func NewPostgresRepository(pool *pgxpool.Pool, log *logrus.Logger) *postgresRepo
 }
 
 func (pr *postgresRepository) SaveCharacters(ctx context.Context, characters []entity.Character) error {
+	tx, err := pr.pool.Begin(ctx)
+	if err != nil {
+		pr.log.WithError(err).Error("failed to begin transaction")
+		return errors.NewAppError("failed to begin transaction", err)
+	}
+	defer tx.Rollback(ctx)
+
 	query := psql.
 		Insert("profile").
 		Columns(
+			"character_id",
 			"blizzard_id",
 			"battletag",
 			"name",
@@ -42,6 +50,7 @@ func (pr *postgresRepository) SaveCharacters(ctx context.Context, characters []e
 
 	for _, char := range characters {
 		query = query.Values(
+			char.CharacterID,
 			char.BlizzardID,
 			char.Battletag,
 			char.Name,
@@ -59,6 +68,7 @@ func (pr *postgresRepository) SaveCharacters(ctx context.Context, characters []e
 	}
 
 	sql, args, err := query.Suffix("ON CONFLICT (blizzard_id, name, realm) DO UPDATE SET " +
+		"character_id = EXCLUDED.character_id, " +
 		"battletag = EXCLUDED.battletag, " +
 		"race = EXCLUDED.race, " +
 		"faction = EXCLUDED.faction, " +
@@ -82,16 +92,72 @@ func (pr *postgresRepository) SaveCharacters(ctx context.Context, characters []e
 		return errors.NewAppError("failed execute SQL save characters", err)
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		pr.log.WithError(err).Error("failed to commit transaction")
+		return errors.NewAppError("failed to commit transaction", err)
+	}
+
 	pr.log.Infof("Saved/updated %d characters", len(characters))
 	return nil
 }
 
 func (pr *postgresRepository) SaveGuilds(ctx context.Context, guilds []entity.Guild) error {
+	if len(guilds) == 0 {
+		return nil
+	}
 
+	query := psql.
+		Insert("guild").
+		Columns(
+			"character_id",
+			"guild_id",
+			"name",
+			"name_slug",
+			"realm",
+			"realm_slug",
+			"faction",
+		)
+
+	for _, g := range guilds {
+		query = query.Values(
+			g.CharacterID,
+			g.GuildID,
+			g.Name,
+			g.NameSlug,
+			g.Realm,
+			g.RealmSlug,
+			g.Faction,
+		)
+	}
+
+	sql, args, err := query.Suffix(`
+		ON CONFLICT (character_id) DO UPDATE SET
+			guild_id = EXCLUDED.guild_id,
+			name = EXCLUDED.name,
+			name_slug = EXCLUDED.name_slug,
+			realm = EXCLUDED.realm,
+			realm_slug = EXCLUDED.realm_slug,
+			faction = EXCLUDED.faction
+	`).ToSql()
+
+	if err != nil {
+		pr.log.WithError(err).Error("failed build query for save guilds")
+		return errors.NewAppError("failed build query for save guilds", err)
+	}
+
+	_, err = pr.pool.Exec(ctx, sql, args...)
+	if err != nil {
+		pr.log.WithError(err).Error("failed execute SQL save guilds")
+		return errors.NewAppError("failed execute SQL save guilds", err)
+	}
+
+	pr.log.Infof("Saved/updated %d guilds", len(guilds))
+	return nil
 }
 
 func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID string) ([]entity.Character, error) {
 	query := psql.Select(
+		"character_id",
 		"blizzard_id",
 		"battletag",
 		"name",
@@ -128,6 +194,7 @@ func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID stri
 	for rows.Next() {
 		char := entity.Character{}
 		err := rows.Scan(
+			&char.CharacterID,
 			&char.BlizzardID,
 			&char.Battletag,
 			&char.Name,
@@ -213,6 +280,7 @@ func (pr *postgresRepository) SetMainCharacter(ctx context.Context, blizzardID, 
 
 func (pr *postgresRepository) GetCharacterByName(ctx context.Context, charName string) (*entity.Character, error) {
 	query, args, err := psql.Select(
+		"character_id",
 		"blizzard_id",
 		"battletag",
 		"name",
@@ -238,6 +306,7 @@ func (pr *postgresRepository) GetCharacterByName(ctx context.Context, charName s
 	var char entity.Character
 	if err := pr.pool.QueryRow(ctx, query, args...).
 		Scan(
+			&char.CharacterID,
 			&char.BlizzardID,
 			&char.Battletag,
 			&char.Name,

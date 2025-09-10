@@ -10,4 +10,5 @@ type PostgresRepository interface {
 	SaveCharacters(ctx context.Context, characters []entity.Character) error
 	GetCharacterByName(ctx context.Context, charName string) (*entity.Character, error)
 	SetMainCharacter(ctx context.Context, blizzardID, charName string) error
+	SaveGuilds(ctx context.Context, guilds []entity.Guild) error
 }

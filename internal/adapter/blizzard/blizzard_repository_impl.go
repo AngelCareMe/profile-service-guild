@@ -113,27 +113,27 @@ func (br *blizzardRepository) GetBlizzardAccessToken(ctx context.Context, jwtTok
 	return tokenResp.AccessToken, nil
 }
 
-func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess, jwtToken string) ([]entity.Character, error) {
+func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess, jwtToken string) ([]entity.Character, []entity.Guild, error) {
 	if blizzAccess == "" {
 		br.log.Error("access header is missing")
-		return nil, errors.NewAppError("access token is empty", nil)
+		return nil, nil, errors.NewAppError("access token is empty", nil)
 	}
 	if jwtToken == "" {
 		br.log.Error("jwt token is missing")
-		return nil, errors.NewAppError("access token is empty", nil)
+		return nil, nil, errors.NewAppError("access token is empty", nil)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://eu.api.blizzard.com/profile/user/wow?namespace=profile-eu&locale=ru_RU", nil)
 	if err != nil {
 		br.log.WithError(err).Errorf("failed create characters request: %v ", err)
-		return nil, errors.NewAppError("failed create characters request", err)
+		return nil, nil, errors.NewAppError("failed create characters request", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+blizzAccess)
 
 	resp, err := br.client.Do(req)
 	if err != nil {
 		br.log.WithError(err).Error("failed get characters response")
-		return nil, errors.NewAppError("failed get characters response", err)
+		return nil, nil, errors.NewAppError("failed get characters response", err)
 	}
 	defer resp.Body.Close()
 
@@ -143,22 +143,23 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess, jw
 			"status": resp.StatusCode,
 			"body":   string(body),
 		}).Warn("bad response from API")
-		return nil, errors.NewAppError("bad response", err)
+		return nil, nil, errors.NewAppError("bad response", err)
 	}
 
 	var profile dto.BlizzardProfileResponse
 	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		br.log.WithError(err).Error("failed to decode profile response")
-		return nil, errors.NewAppError("failed to decode profile", err)
+		return nil, nil, errors.NewAppError("failed to decode profile", err)
 	}
 
 	user, err := br.GetUserData(ctx, jwtToken)
 	if err != nil {
 		br.log.WithError(err).Error("failed parse user data")
-		return nil, err
+		return nil, nil, err
 	}
 
 	characters := make([]entity.Character, 0)
+	guilds := make([]entity.Guild, 0)
 	mu := &sync.Mutex{}
 
 	type job struct {
@@ -229,6 +230,20 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess, jw
 
 				mu.Lock()
 				characters = append(characters, newChar)
+				if details.Guild.ID != 0 && details.Guild.Name != "" && details.Guild.Name != "Нет гильдии" {
+					guildNameSlugLower := strings.ToLower(details.Guild.Name)
+					guildNameSlug := strings.ReplaceAll(guildNameSlugLower, " ", "-")
+					newGuild := entity.Guild{
+						CharacterID: details.ID,
+						GuildID:     details.Guild.ID,
+						Name:        details.Guild.Name,
+						NameSlug:    guildNameSlug,
+						Realm:       details.Guild.Realm.Name,
+						RealmSlug:   details.Guild.Realm.Slug,
+						Faction:     details.Guild.Faction.Name,
+					}
+					guilds = append(guilds, newGuild)
+				}
 				mu.Unlock()
 			}
 		}()
@@ -248,8 +263,8 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess, jw
 	}()
 
 	wg.Wait()
-	br.log.Info("Characters parsed succeeded")
-	return characters, nil
+	br.log.Info("Characters and guilds parsed succeeded")
+	return characters, guilds, nil
 }
 
 func (br *blizzardRepository) GetGuild(ctx context.Context, blizzAccess, realm, charName string) (*entity.Guild, error) {

@@ -31,3 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_character_blizzard_id ON profile (blizzard_id);
 CREATE INDEX IF NOT EXISTS idx_character_battletag ON profile (battletag);
 
 CREATE UNIQUE INDEX idx_profile_blizzard_id_main ON profile (blizzard_id) WHERE is_main = true;
+
+ALTER TABLE guild ADD CONSTRAINT unique_character_guild UNIQUE (character_id);
+CREATE INDEX IF NOT EXISTS idx_guild_guild_id ON guild (guild_id);
+CREATE INDEX IF NOT EXISTS idx_guild_character_id ON guild (character_id);

@@ -48,9 +48,9 @@ func (uc *profileUsecase) GetCharacters(ctx context.Context, blizzardID, accessT
 		uc.log.Debugf("Found %d characters in DB for blizzard_id %s", len(dbChars), blizzardID)
 		return dbChars, nil
 	}
-
 	uc.log.Debug("No characters found in DB or blizzardID not provided, fetching from Blizzard API")
-	blizzChars, err := uc.blizzAd.GetCharacters(ctx, accessToken, jwtToken)
+
+	blizzChars, guilds, err := uc.blizzAd.GetCharacters(ctx, accessToken, jwtToken)
 	if err != nil {
 		uc.log.WithError(err).Error("failed fetch characters from Blizzard API")
 		return nil, err
@@ -60,6 +60,11 @@ func (uc *profileUsecase) GetCharacters(ctx context.Context, blizzardID, accessT
 	if len(blizzChars) > 0 {
 		if err := uc.dbAd.SaveCharacters(ctx, blizzChars); err != nil {
 			uc.log.WithError(err).Error("Failed save characters")
+			return nil, err
+		}
+
+		if err := uc.dbAd.SaveGuilds(ctx, guilds); err != nil {
+			uc.log.WithError(err).Error("Failed save guilds")
 			return nil, err
 		}
 		uc.log.Infof("Saved %d characters to DB", len(blizzChars))
@@ -76,7 +81,7 @@ func (uc *profileUsecase) RefreshCharacters(ctx context.Context, blizzardID, acc
 		return errors.NewAppError("id or access token is empty", nil)
 	}
 
-	blizzChars, err := uc.blizzAd.GetCharacters(ctx, accessToken, jwtToken)
+	blizzChars, guilds, err := uc.blizzAd.GetCharacters(ctx, accessToken, jwtToken)
 	if err != nil {
 		uc.log.WithError(err).Error("failed fetch characters from Blizzard API")
 		return err
@@ -84,6 +89,11 @@ func (uc *profileUsecase) RefreshCharacters(ctx context.Context, blizzardID, acc
 
 	if err := uc.dbAd.SaveCharacters(ctx, blizzChars); err != nil {
 		uc.log.WithError(err).Error("failed save characters")
+		return err
+	}
+
+	if err := uc.dbAd.SaveGuilds(ctx, guilds); err != nil {
+		uc.log.WithError(err).Error("Failed save guilds")
 		return err
 	}
 
