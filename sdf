@@ -1,5 +1,9 @@
-curl --noproxy localhost http://localhost:8081/profile/characters -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTc0OTA2ODksImlhdCI6MTc1NzQ4ODg4OSwic3ViIjoiMTE3MDYwMDY1NiIsInR5cCI6ImFjY2VzcyJ9.Df6G1wDsjhDMnSSeQqJBzrHifhhfIGNiJVKHN3t-XYs"
+curl --noproxy localhost http://localhost:8081/profile/characters -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTc1MjM5ODAsImlhdCI6MTc1NzUyMjE4MCwic3ViIjoiMTE3MDYwMDY1NiIsInR5cCI6ImFjY2VzcyJ9._j7dIPzJRajP3Zr0kwLMRuwxxOh1yIDPOtXe-KxSdDI"
 
 curl --noproxy localhost http://localhost:8081/profile/refresh -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTc0ODY1ODYsImlhdCI6MTc1NzQ4NDc4Niwic3ViIjoiMTE3MDYwMDY1NiIsInR5cCI6ImFjY2VzcyJ9.ylLwzyTgHkHoOmTFgDhDDTtHeOhEXGfXpdQd2g99p3Q"
 
 curl --noproxy localhost -X POST http://localhost:8081/profile/main?character=аллидерия -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTc0ODg0MzcsImlhdCI6MTc1NzQ4NjYzNywic3ViIjoiMTE3MDYwMDY1NiIsInR5cCI6ImFjY2VzcyJ9.-plqHPxq-4lqcl8ptn8X6pcaRh-wYqetzo2eNiiCvc4"
+
+curl -v http://localhost:8080/auth/blizzard/token \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTc1MjQxMTksImlhdCI6MTc1NzUyMjMxOSwic3ViIjoiMTE3MDYwMDY1NiIsInR5cCI6ImFjY2VzcyJ9.U1dZ5faYGnp05d6yD7qiIvw3dxnI5JF6G3yyUTRgRJI"
+
