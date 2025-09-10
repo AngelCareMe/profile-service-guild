@@ -86,6 +86,10 @@ func (pr *postgresRepository) SaveCharacters(ctx context.Context, characters []e
 	return nil
 }
 
+func (pr *postgresRepository) SaveGuilds(ctx context.Context, guilds []entity.Guild) error {
+
+}
+
 func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID string) ([]entity.Character, error) {
 	query := psql.Select(
 		"blizzard_id",

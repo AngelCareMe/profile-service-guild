@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS profile (
-    blizzard_id TEXT,
-    battletag TEXT,
+    character_id INTEGER NOT NULL UNIQUE,
+    blizzard_id TEXT NOT NULL,
+    battletag TEXT NOT NULL,
     name VARCHAR(25) NOT NULL,
     realm VARCHAR(25) NOT NULL,
     race VARCHAR(25) NOT NULL,
@@ -13,6 +14,16 @@ CREATE TABLE IF NOT EXISTS profile (
     mythic_score NUMERIC(10,2),
     is_main BOOLEAN,
     PRIMARY KEY (blizzard_id, name, realm)
+);
+
+CREATE TABLE IF NOT EXISTS guild (
+    character_id INTEGER NOT NULL UNIQUE REFERENCES profile(character_id),
+    guild_id INTEGER NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    name_slug VARCHAR(70) NOT NULL,
+    realm VARCHAR(25) NOT NULL,
+    realm_slug VARCHAR(30) NOT NULL,
+    faction VARCHAR(10) NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_character_blizzard_id ON profile (blizzard_id);

@@ -1,6 +1,7 @@
 package entity
 
 type Character struct {
+	CharacterID int     `json:"character_id" db:"character_id"`
 	BlizzardID  string  `json:"blizzard_id" db:"blizzard_id"`
 	Battletag   string  `json:"battletag" db:"battletag"`
 	Name        string  `json:"name" db:"name"`

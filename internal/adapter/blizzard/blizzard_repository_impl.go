@@ -197,12 +197,21 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess, jw
 						}{"Unknown"},
 						Ilvl: 0,
 						Guild: struct {
-							Name string "json:\"name\""
-						}{"None"},
+							Name  string "json:\"name\""
+							ID    int    "json:\"id\""
+							Realm struct {
+								Name string "json:\"name\""
+								Slug string "json:\"slug\""
+							} "json:\"realm\""
+							Faction struct {
+								Name string "json:\"name\""
+							} "json:\"faction\""
+						}{},
 					}
 				}
 
 				newChar := entity.Character{
+					CharacterID: details.ID,
 					BlizzardID:  user.ID,
 					Battletag:   user.Battletag,
 					Name:        char.Name,
@@ -241,6 +250,36 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess, jw
 	wg.Wait()
 	br.log.Info("Characters parsed succeeded")
 	return characters, nil
+}
+
+func (br *blizzardRepository) GetGuild(ctx context.Context, blizzAccess, realm, charName string) (*entity.Guild, error) {
+	if blizzAccess == "" || realm == "" || charName == "" {
+		br.log.Error("access header/realm/character name is missing")
+		return nil, fmt.Errorf("token/realm/character name is empty")
+	}
+
+	details, err := br.getCharacterDetails(ctx, blizzAccess, realm, charName)
+	if err != nil {
+		br.log.WithError(err).WithFields(logrus.Fields{
+			"character": charName,
+			"realm":     realm,
+		}).Warn("failed to get character details")
+	}
+
+	guildNameSlugLower := strings.ToLower(details.Guild.Name)
+	guildNameSlug := strings.ReplaceAll(guildNameSlugLower, " ", "-")
+
+	guild := &entity.Guild{
+		CharacterID: details.ID,
+		GuildID:     details.Guild.ID,
+		Name:        details.Guild.Name,
+		NameSlug:    guildNameSlug,
+		Realm:       details.Guild.Realm.Name,
+		RealmSlug:   details.Guild.Realm.Slug,
+		Faction:     details.Guild.Faction.Name,
+	}
+
+	return guild, nil
 }
 
 func (br *blizzardRepository) getCharacterDetails(ctx context.Context, blizzAccess, realm, charName string) (*dto.CharacterDetailsResponse, error) {

@@ -36,11 +36,20 @@ type BlizzardProfileResponse struct {
 }
 
 type CharacterDetailsResponse struct {
+	ID   int `json:"id"`
 	Spec struct {
 		Name string `json:"name"`
 	} `json:"active_spec"`
 	Guild struct {
-		Name string `json:"name"`
+		Name  string `json:"name"`
+		ID    int    `json:"id"`
+		Realm struct {
+			Name string `json:"name"`
+			Slug string `json:"slug"`
+		} `json:"realm"`
+		Faction struct {
+			Name string `json:"name"`
+		} `json:"faction"`
 	} `json:"guild"`
 	Ilvl int `json:"average_item_level"`
 }
