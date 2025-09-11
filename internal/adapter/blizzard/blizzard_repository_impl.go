@@ -267,36 +267,6 @@ func (br *blizzardRepository) GetCharacters(ctx context.Context, blizzAccess, jw
 	return characters, guilds, nil
 }
 
-func (br *blizzardRepository) GetGuild(ctx context.Context, blizzAccess, realm, charName string) (*entity.Guild, error) {
-	if blizzAccess == "" || realm == "" || charName == "" {
-		br.log.Error("access header/realm/character name is missing")
-		return nil, fmt.Errorf("token/realm/character name is empty")
-	}
-
-	details, err := br.getCharacterDetails(ctx, blizzAccess, realm, charName)
-	if err != nil {
-		br.log.WithError(err).WithFields(logrus.Fields{
-			"character": charName,
-			"realm":     realm,
-		}).Warn("failed to get character details")
-	}
-
-	guildNameSlugLower := strings.ToLower(details.Guild.Name)
-	guildNameSlug := strings.ReplaceAll(guildNameSlugLower, " ", "-")
-
-	guild := &entity.Guild{
-		CharacterID: details.ID,
-		GuildID:     details.Guild.ID,
-		Name:        details.Guild.Name,
-		NameSlug:    guildNameSlug,
-		Realm:       details.Guild.Realm.Name,
-		RealmSlug:   details.Guild.Realm.Slug,
-		Faction:     details.Guild.Faction.Name,
-	}
-
-	return guild, nil
-}
-
 func (br *blizzardRepository) getCharacterDetails(ctx context.Context, blizzAccess, realm, charName string) (*dto.CharacterDetailsResponse, error) {
 	if blizzAccess == "" || realm == "" || charName == "" {
 		br.log.Error("access header/realm/character name is missing")

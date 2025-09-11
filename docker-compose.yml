@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # СВОЯ база данных для profile сервиса
   profile_postgres:

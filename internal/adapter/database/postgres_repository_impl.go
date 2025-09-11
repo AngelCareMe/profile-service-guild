@@ -6,6 +6,7 @@ import (
 	"profile-service/pkg/errors"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sirupsen/logrus"
 )
@@ -153,6 +154,108 @@ func (pr *postgresRepository) SaveGuilds(ctx context.Context, guilds []entity.Gu
 
 	pr.log.Infof("Saved/updated %d guilds", len(guilds))
 	return nil
+}
+
+func (pr *postgresRepository) GetGuildByName(ctx context.Context, nameSlug string) (*entity.Guild, error) {
+	query, args, err := psql.Select(
+		"character_id",
+		"guild_id",
+		"name",
+		"name_slug",
+		"realm",
+		"realm_slug",
+		"faction",
+	).
+		From("guild").
+		Where(sq.Eq{"name_slug": nameSlug}).
+		ToSql()
+	if err != nil {
+		pr.log.WithError(err).Error("failed build query for get guild")
+		return nil, errors.NewAppError("failed build query for get guild", err)
+	}
+
+	var g entity.Guild
+	err = pr.pool.QueryRow(ctx, query, args...).
+		Scan(
+			&g.CharacterID,
+			&g.GuildID,
+			&g.Name,
+			&g.NameSlug,
+			&g.Realm,
+			&g.RealmSlug,
+			&g.Faction,
+		)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			pr.log.WithField("name_slug", nameSlug).Info("guild not found")
+			return nil, errors.NewAppError("guild not found", err)
+		}
+		pr.log.WithError(err).Error("failed to scan guild row")
+		return nil, errors.NewAppError("failed to scan guild row", err)
+	}
+
+	pr.log.Infof("Guild %s get succeeded", nameSlug)
+	return &g, nil
+}
+
+func (pr *postgresRepository) GetMainCharacterByBlizzardID(ctx context.Context, blizzardID string) (*entity.Character, error) {
+	query, args, err := psql.Select(
+		"character_id",
+		"blizzard_id",
+		"battletag",
+		"name",
+		"realm",
+		"race",
+		"faction",
+		"class",
+		"spec",
+		"lvl",
+		"ilvl",
+		"guild",
+		"mythic_score",
+		"is_main",
+	).
+		From("profile").
+		Where(sq.Eq{
+			"blizzard_id": blizzardID,
+			"is_main":     true,
+		}).
+		ToSql()
+	if err != nil {
+		pr.log.WithError(err).Error("failed build query for get character")
+		return nil, errors.NewAppError("failed build query for get character", err)
+	}
+
+	var char entity.Character
+	err = pr.pool.QueryRow(ctx, query, args...).
+		Scan(
+			&char.CharacterID,
+			&char.BlizzardID,
+			&char.Battletag,
+			&char.Name,
+			&char.Realm,
+			&char.Race,
+			&char.Faction,
+			&char.Class,
+			&char.Spec,
+			&char.Lvl,
+			&char.Ilvl,
+			&char.Guild,
+			&char.MythicScore,
+			&char.IsMain,
+		)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			pr.log.WithField("name", char.Name).Info("character not found")
+			return nil, errors.NewAppError("character not found", err)
+		}
+		pr.log.WithError(err).Error("failed to scan character row")
+		return nil, errors.NewAppError("failed to scan character row", err)
+	}
+
+	pr.log.Infof("Character %s get succeeded", char.Name)
+	return &char, nil
 }
 
 func (pr *postgresRepository) GetCharacters(ctx context.Context, blizzardID string) ([]entity.Character, error) {
@@ -325,6 +428,6 @@ func (pr *postgresRepository) GetCharacterByName(ctx context.Context, charName s
 		return nil, errors.NewAppError("failed to scan character row", err)
 	}
 
-	pr.log.WithField("character", charName).Infof("%s get succeeded", charName)
+	pr.log.Infof("%s get succeeded", charName)
 	return &char, nil
 }

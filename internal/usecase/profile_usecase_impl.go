@@ -75,6 +75,22 @@ func (uc *profileUsecase) GetCharacters(ctx context.Context, blizzardID, accessT
 	return blizzChars, nil
 }
 
+func (uc *profileUsecase) GetGuildByName(ctx context.Context, nameSlug string) (*entity.Guild, error) {
+	if nameSlug == "" {
+		uc.log.Warn("guild name is empty")
+		return nil, errors.NewAppError("guild name is empty", nil)
+	}
+
+	guild, err := uc.dbAd.GetGuildByName(ctx, nameSlug)
+	if err != nil {
+		uc.log.WithError(err).Error("failed get guild by name")
+		return nil, err
+	}
+
+	uc.log.WithField("guild", nameSlug).Info("Get guild succeded")
+	return guild, nil
+}
+
 func (uc *profileUsecase) RefreshCharacters(ctx context.Context, blizzardID, accessToken, jwtToken string) error {
 	if accessToken == "" || blizzardID == "" {
 		uc.log.Warn("id or access token is empty")
@@ -115,6 +131,28 @@ func (uc *profileUsecase) SetMain(ctx context.Context, blizzardID, charName stri
 	if err := uc.dbAd.SetMainCharacter(ctx, blizzardID, charName); err != nil {
 		return err
 	}
+	uc.log.WithFields(logrus.Fields{
+		"character": charName,
+	}).Info("Set main character successfully")
 
 	return nil
+}
+
+func (uc *profileUsecase) GetMainCharacterByBlizzardID(ctx context.Context, blizzardID string) (*entity.Character, error) {
+	if blizzardID == "" {
+		uc.log.Error("blizzardID is empty")
+		return nil, errors.NewAppError("blizzardID is empty", nil)
+	}
+
+	char, err := uc.dbAd.GetMainCharacterByBlizzardID(ctx, blizzardID)
+	if err != nil {
+		uc.log.WithError(err).Errorf("character not found")
+		return nil, err
+	}
+
+	uc.log.WithFields(logrus.Fields{
+		"blizzard_id": blizzardID,
+	}).Info("Get main character succeeded")
+
+	return char, nil
 }

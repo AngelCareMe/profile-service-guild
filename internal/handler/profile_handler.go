@@ -166,3 +166,65 @@ func (h *ProfileHandler) RefreshCharacters(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"characters": characters})
 }
+
+func (h *ProfileHandler) GetGuild(c *gin.Context) {
+	guildName := c.Query("name")
+
+	if guildName == "" {
+		h.log.Error("Guild name is missing")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing guild name"})
+		return
+	}
+
+	guild, err := h.uc.GetGuildByName(c.Request.Context(), guildName)
+	if err != nil {
+		if strings.Contains(err.Error(), "guild not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "guild not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	if guild == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "guild not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Guild found",
+		"name":    guildName,
+		"guild":   guild,
+	})
+}
+
+func (h *ProfileHandler) GetMainCharacter(c *gin.Context) {
+	blizzardID := c.Query("blizzard_id")
+
+	if blizzardID == "" {
+		h.log.Error("Blizzard ID is missing")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing blizzard id"})
+		return
+	}
+
+	char, err := h.uc.GetMainCharacterByBlizzardID(c.Request.Context(), blizzardID)
+	if err != nil {
+		if strings.Contains(err.Error(), "character not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "character not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	if char == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "character not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Character found",
+		"name":      char.Name,
+		"character": char,
+	})
+}
